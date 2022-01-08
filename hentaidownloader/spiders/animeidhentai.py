@@ -1,5 +1,8 @@
 import scrapy
-
+from scrapy_splash import SplashRequest
+import wget
+from download import download
+import os
 
 class AnimeidhentaiSpider(scrapy.Spider):
     name = 'animeidhentai'
@@ -34,7 +37,8 @@ class AnimeidhentaiSpider(scrapy.Spider):
             for n in range(len(hentai_list)):
                 print(str(n)+'.'+hentai_list[n][0])
             hentai_chosen=int(input('Enter Desired Hentai Number from list :) -'))
-            yield scrapy.Request(url=hentai_list[int(hentai_chosen)][1],callback=self.video_parse)
+            chosen_title=hentai_list[int(hentai_chosen)][0]
+            yield scrapy.Request(url=hentai_list[int(hentai_chosen)][1],callback=self.video_parse,meta={'title':chosen_title})
         elif option == 2:
             hentai_list={}
             refer_hentai=0
@@ -49,7 +53,8 @@ class AnimeidhentaiSpider(scrapy.Spider):
             for n in range(len(hentai_list)):
                 print(str(n)+'.'+hentai_list[n][0])
             hentai_chosen=int(input('Enter Desired Hentai Number from list :) -'))
-            yield scrapy.Request(url=hentai_list[int(hentai_chosen)][1],callback=self.video_parse)
+            chosen_title=hentai_list[int(hentai_chosen)][0]
+            yield scrapy.Request(url=hentai_list[int(hentai_chosen)][1],callback=self.video_parse,meta={'title':chosen_title})
                 
     def genre_parse(self,response):
         list=response.xpath(".//section[7]//a[@class='lnk-blk']")
@@ -82,13 +87,37 @@ class AnimeidhentaiSpider(scrapy.Spider):
         for n in range(len(hentai_list)):
             print(str(n)+'.'+hentai_list[n][0])
         hentai_chosen=int(input('Enter Desired Hentai Number from list :) -'))
-        yield scrapy.Request(url=hentai_list[int(hentai_chosen)][1],callback=self.video_parse)
+        chosen_title=hentai_list[int(hentai_chosen)][0]
+        yield scrapy.Request(url=hentai_list[int(hentai_chosen)][1],callback=self.video_parse,meta={'title':chosen_title})
     ###################  Now Parsing Videos  #######################
+    video_script='''
+        function main(splash, args)
+            splash.private_mode_enabled=False
+            assert(splash:go(args.url))
+            assert(splash:wait(15))
+            return {
+                html = splash:html()
+            }
+        end
+    '''
     def video_parse(self,response):
-        print(response)
-
-
-        
+       video_link=response.xpath('//div[@class="embed rad2"]/iframe/@data-litespeed-src').get()
+       yield SplashRequest(url=video_link,callback=self.downvideo,endpoint='http://localhost:8050/execute',args={
+           'lua_source' : self.video_script,
+           'resource_timeout': 10
+       },dont_filter=True,meta={'title':response.request.meta['title']})
+    
+    def downvideo(self , response):
+        link=response.xpath('//a[@class="c-list__item dropdown-item"]/@href').get()
+        print(link)
+        home=os.path.expanduser('~')
+        title=response.request.meta['title']
+        hentaidir=f'{home}/.hentai' 
+        if os.path.isdir(hentaidir):
+            download(link,f'{home}/.hentai/{title}.mp4',progressbar=True)
+        else:
+            os.mkdir(f'{home}/.hentai')
+            download(link,f'{home}/.hentai/{title}.mp4',progressbar=True)
 
 
           
